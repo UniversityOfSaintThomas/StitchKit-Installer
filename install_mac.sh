@@ -174,38 +174,22 @@ print_step "Cloning StitchKit repository..."
 # Check if directory already exists
 if [ -d "$HOME/StitchKit" ]; then
     print_warning "StitchKit directory already exists at ~/StitchKit"
+    print_info "The Python installer will handle backup and restoration"
     
-    # Check for .env file to preserve
-    ENV_EXISTS=false
-    if [ -f "$HOME/StitchKit/.env" ]; then
-        ENV_EXISTS=true
-        print_warning "Found existing .env configuration file"
-    fi
-    
-    read -p "Backup existing directory? (y/n): " backup_existing
-    if [ "$backup_existing" = "y" ]; then
-        BACKUP_DIR="$HOME/StitchKit.backup-$(date +%Y%m%d-%H%M%S)"
-        print_step "Creating backup at $BACKUP_DIR"
-        mv "$HOME/StitchKit" "$BACKUP_DIR"
-        
-        # Note if .env was backed up
-        if [ "$ENV_EXISTS" = true ]; then
-            print_success "Configuration backed up with installation"
-            RESTORE_ENV="$BACKUP_DIR/.env"
-        fi
+    # Don't stop - let the Python installer handle the existing installation
+    # It has sophisticated backup/restore logic built in
+else
+    # Clone using gh since directory doesn't exist
+    if gh repo clone UniversityOfSaintThomas/StitchKit ~/StitchKit; then
+        print_success "Repository cloned successfully"
     else
-        read -p "Remove existing directory? (y/n): " remove_existing
-        if [ "$remove_existing" = "y" ]; then
-            # Save .env if it exists
-            if [ "$ENV_EXISTS" = true ]; then
-                cp "$HOME/StitchKit/.env" "/tmp/stitchkit_env_backup"
-                RESTORE_ENV="/tmp/stitchkit_env_backup"
-            fi
-            rm -rf "$HOME/StitchKit"
-        else
-            echo "Installation cancelled"
-            exit 1
-        fi
+        print_error "Failed to clone repository"
+        echo ""
+        echo "Troubleshooting:"
+        echo "  1. Check your internet connection"
+        echo "  2. Verify GitHub access: gh auth status"
+        echo "  3. Ensure you have access to the repository"
+        exit 1
     fi
 fi
 
