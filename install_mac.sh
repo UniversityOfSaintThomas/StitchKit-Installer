@@ -238,23 +238,30 @@ fi
 # Step 6: Run Python installer
 echo ""
 print_step "Running StitchKit setup..."
-cd ~/StitchKit
 
-# Check if install_stitchkit.py exists in the repo
-if [ -f "install_stitchkit.py" ]; then
+# Download the Python installer from the public installer repository
+print_step "Downloading Python installer..."
+curl -fsSL https://raw.githubusercontent.com/UniversityOfSaintThomas/StitchKit-Installer/main/install_stitchkit.py -o /tmp/install_stitchkit.py
+
+if [ -f "/tmp/install_stitchkit.py" ]; then
     echo ""
     echo "────────────────────────────────────────────────"
     echo ""
     
     if [ "$VERBOSE" = true ]; then
-        python3 install_stitchkit.py --verbose
+        python3 /tmp/install_stitchkit.py --verbose
     else
-        python3 install_stitchkit.py
+        python3 /tmp/install_stitchkit.py
     fi
+    
+    # Clean up
+    rm /tmp/install_stitchkit.py
 else
-    # If installer doesn't exist in repo, run basic setup
-    print_warning "Installer script not found in repository"
+    # If download fails, run basic setup
+    print_warning "Could not download installer script"
     print_step "Running basic setup..."
+    
+    cd ~/StitchKit
     
     # Install Python dependencies
     if [ -f "requirements.txt" ]; then
