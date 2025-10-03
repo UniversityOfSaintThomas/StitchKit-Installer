@@ -174,10 +174,10 @@ print_step "Cloning StitchKit repository..."
 # Check if directory already exists
 if [ -d "$HOME/StitchKit" ]; then
     print_warning "StitchKit directory already exists at ~/StitchKit"
-    print_info "The Python installer will handle backup and restoration"
+    print_warning "The Python installer will handle backup and restoration"
     
-    # Don't stop - let the Python installer handle the existing installation
-    # It has sophisticated backup/restore logic built in
+    # Don't try to clone again - directory exists
+    # Just continue to the Python installer which will handle it
 else
     # Clone using gh since directory doesn't exist
     if gh repo clone UniversityOfSaintThomas/StitchKit ~/StitchKit; then
