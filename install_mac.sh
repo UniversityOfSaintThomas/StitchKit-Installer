@@ -1,6 +1,12 @@
 #!/bin/bash
 
-# Colors for output
+# StitchKit Installer for macOS
+# University of St. Thomas
+# Private Repository Edition
+
+set -e  # Exit on error
+
+# Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -9,7 +15,7 @@ NC='\033[0m' # No Color
 
 # Verbose mode flag
 VERBOSE=false
-if [[ "$1" == "--verbose" ]]; then
+if [ "$1" = "--verbose" ]; then
     VERBOSE=true
 fi
 
@@ -22,16 +28,16 @@ print_success() {
     echo -e "${GREEN}✓${NC} $1"
 }
 
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
 print_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
 # Header
-clear
+echo ""
 echo "╔════════════════════════════════════════════════╗"
 echo "║       StitchKit Installer for macOS           ║"
 echo "║          University of St. Thomas             ║"
@@ -45,129 +51,84 @@ if command -v python3 &> /dev/null; then
     PYTHON_VERSION=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     print_success "Python $PYTHON_VERSION found"
 else
-    print_warning "Python 3 not found"
-    print_step "Installing Python 3..."
-    
-    # Download Python installer from python.org
-    echo "  Downloading Python 3.11..."
-    curl -# -o python-installer.pkg https://www.python.org/ftp/python/3.11.0/python-3.11.0-macos11.pkg
-    
-    echo "  Installing Python (you may be prompted for your password)..."
-    sudo installer -pkg python-installer.pkg -target /
-    
-    # Clean up
-    rm python-installer.pkg
-    
-    # Verify installation
-    if command -v python3 &> /dev/null; then
-        print_success "Python installed successfully"
-    else
-        print_error "Python installation failed"
-        echo "Please install Python manually from: https://www.python.org/downloads/"
-        exit 1
-    fi
+    print_error "Python 3 not found"
+    echo "Please install Python 3 from https://www.python.org/downloads/"
+    exit 1
 fi
 
 # Step 2: Check for Git
+echo ""
 print_step "Checking for Git..."
 if command -v git &> /dev/null; then
-    GIT_VERSION=$(git --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    GIT_VERSION=$(git --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     print_success "Git $GIT_VERSION found"
 else
-    print_warning "Git not found"
-    print_step "Installing Git via Xcode Command Line Tools..."
-    echo "  This will open a dialog to install developer tools"
-    echo "  Please click 'Install' and wait for completion"
-    
-    # Trigger Xcode CLI tools installation
-    xcode-select --install 2> /dev/null
-    
-    # Wait for user to complete installation
-    echo ""
-    read -p "  Press Enter after installation completes..."
-    
-    # Verify installation
-    if command -v git &> /dev/null; then
-        print_success "Git installed successfully"
-    else
-        print_error "Git installation failed"
-        echo "Please install Xcode Command Line Tools manually"
-        exit 1
-    fi
+    print_error "Git not found"
+    echo "Please install Xcode Command Line Tools:"
+    echo "  xcode-select --install"
+    exit 1
 fi
 
 # Step 3: Check for GitHub CLI
+echo ""
 print_step "Checking for GitHub CLI..."
 if command -v gh &> /dev/null; then
-    GH_VERSION=$(gh --version | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    GH_VERSION=$(gh --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     print_success "GitHub CLI $GH_VERSION found"
 else
-    print_warning "GitHub CLI not found"
-    print_step "Installing GitHub CLI..."
+    print_warning "GitHub CLI not found. Installing..."
     
-    # Detect architecture
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "arm64" ]; then
+    # Download and install GitHub CLI directly (no Homebrew required)
+    GH_VERSION="2.40.1"
+    GH_ARCH=$(uname -m)
+    
+    if [ "$GH_ARCH" = "arm64" ]; then
         GH_ARCH="arm64"
     else
         GH_ARCH="amd64"
     fi
     
-    # Download GitHub CLI directly from GitHub releases
-    echo "  Downloading GitHub CLI for $ARCH architecture..."
-    GH_VERSION="2.40.0"
-    curl -# -L -o gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_macOS_${GH_ARCH}.tar.gz"
+    GH_URL="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_macOS_${GH_ARCH}.tar.gz"
     
-    # Extract
-    tar -xzf gh.tar.gz
+    print_step "Downloading GitHub CLI..."
+    curl -L -o /tmp/gh.tar.gz "$GH_URL"
     
-    # Move to /usr/local/bin
-    echo "  Installing GitHub CLI (you may be prompted for your password)..."
-    sudo mkdir -p /usr/local/bin
-    sudo mv "gh_${GH_VERSION}_macOS_${GH_ARCH}/bin/gh" /usr/local/bin/
+    print_step "Installing GitHub CLI..."
+    sudo tar -xzf /tmp/gh.tar.gz -C /usr/local --strip-components=1
+    rm /tmp/gh.tar.gz
     
-    # Clean up
-    rm -rf gh.tar.gz "gh_${GH_VERSION}_macOS_${GH_ARCH}"
-    
-    # Verify installation
     if command -v gh &> /dev/null; then
         print_success "GitHub CLI installed successfully"
     else
-        print_error "GitHub CLI installation failed"
+        print_error "Failed to install GitHub CLI"
+        echo "Please install manually from: https://cli.github.com"
         exit 1
     fi
 fi
 
-# Step 4: Authenticate with GitHub
+# Step 4: Check GitHub authentication
 echo ""
 print_step "Checking GitHub authentication..."
 if ! gh auth status &> /dev/null; then
-    print_warning "Not authenticated with GitHub"
+    print_warning "GitHub authentication required"
     echo ""
-    echo "You need to authenticate to access the private StitchKit repository."
-    echo "This will open your browser for authentication."
-    echo ""
-    echo "When prompted:"
-    echo "  1. Choose 'GitHub.com'"
+    echo "You need to authenticate with GitHub to access the private repository."
+    echo "Please follow these steps:"
+    echo "  1. Choose 'GitHub.com' when prompted"
     echo "  2. Choose 'HTTPS' for protocol"
-    echo "  3. Authenticate via browser"
-    echo "  4. If your organization uses SSO, authorize for UST"
+    echo "  3. Authenticate with your browser"
+    echo "  4. If you use SSO, authorize for your organization"
     echo ""
-    read -p "Press Enter to begin authentication..."
-    
     gh auth login
     
-    # Verify authentication worked
     if ! gh auth status &> /dev/null; then
         print_error "Authentication failed"
-        echo "Please try running: gh auth login"
         exit 1
     fi
 fi
-
 print_success "GitHub authentication confirmed"
 
-# Step 5: Clone the repository
+# Step 5: Clone the repository (if needed)
 echo ""
 print_step "Cloning StitchKit repository..."
 
@@ -175,11 +136,9 @@ print_step "Cloning StitchKit repository..."
 if [ -d "$HOME/StitchKit" ]; then
     print_warning "StitchKit directory already exists at ~/StitchKit"
     print_warning "The Python installer will handle backup and restoration"
-    
-    # Don't try to clone again - directory exists
-    # Just continue to the Python installer which will handle it
+    # Don't try to clone - just continue to Python installer
 else
-    # Clone using gh since directory doesn't exist
+    # Directory doesn't exist, so clone it
     if gh repo clone UniversityOfSaintThomas/StitchKit ~/StitchKit; then
         print_success "Repository cloned successfully"
     else
@@ -193,45 +152,18 @@ else
     fi
 fi
 
-# Clone using gh
-cd ~
-if gh repo clone UniversityOfSaintThomas/StitchKit StitchKit; then
-    print_success "Repository cloned successfully"
-    
-    # Offer to restore .env if we have one
-    if [ ! -z "$RESTORE_ENV" ] && [ -f "$RESTORE_ENV" ]; then
-        echo ""
-        print_warning "Found previous configuration file"
-        read -p "Restore your API credentials from backup? (y/n): " restore_env
-        if [ "$restore_env" = "y" ]; then
-            cp "$RESTORE_ENV" "$HOME/StitchKit/.env"
-            print_success "Configuration restored"
-        fi
-    fi
-else
-    print_error "Failed to clone repository"
-    # ... rest of error handling
-    echo ""
-    echo "Troubleshooting:"
-    echo "  1. Verify you have access to the repository"
-    echo "  2. Check your authentication: gh auth status"
-    echo "  3. If using SSO, authorize your token: gh auth refresh -s read:org"
-    exit 1
-fi
-
 # Step 6: Run Python installer
 echo ""
 print_step "Running StitchKit setup..."
 
 # Download the Python installer from the public installer repository
 print_step "Downloading Python installer..."
-curl -fsSL https://raw.githubusercontent.com/UniversityOfSaintThomas/StitchKit-Installer/main/install_stitchkit.py -o /tmp/install_stitchkit.py
-
-if [ -f "/tmp/install_stitchkit.py" ]; then
+if curl -fsSL https://raw.githubusercontent.com/UniversityOfSaintThomas/StitchKit-Installer/main/install_stitchkit.py -o /tmp/install_stitchkit.py; then
     echo ""
     echo "────────────────────────────────────────────────"
     echo ""
     
+    # Run the Python installer
     if [ "$VERBOSE" = true ]; then
         python3 /tmp/install_stitchkit.py --verbose
     else
@@ -239,15 +171,14 @@ if [ -f "/tmp/install_stitchkit.py" ]; then
     fi
     
     # Clean up
-    rm /tmp/install_stitchkit.py
+    rm -f /tmp/install_stitchkit.py
 else
-    # If download fails, run basic setup
-    print_warning "Could not download installer script"
+    print_warning "Could not download Python installer"
     print_step "Running basic setup..."
     
     cd ~/StitchKit
     
-    # Install Python dependencies
+    # Install Python dependencies if requirements.txt exists
     if [ -f "requirements.txt" ]; then
         echo "  Installing Python dependencies..."
         python3 -m pip install -r requirements.txt
@@ -262,14 +193,14 @@ else
 fi
 
 echo ""
-echo "────────────────────────────────────────────────"
+echo "════════════════════════════════════════════════"
 echo ""
 print_success "StitchKit installation complete!"
 echo ""
-echo "Next steps:"
-echo "  1. cd ~/StitchKit"
-echo "  2. Edit .env with your Canvas API credentials"
-echo "  3. python3 main.py"
+echo "To start StitchKit:"
+echo "  cd ~/StitchKit"
+echo "  python3 main.py"
 echo ""
-echo "For help, see the README or contact IT support."
+echo "Or use the alias (if configured):"
+echo "  stitchkit"
 echo ""
