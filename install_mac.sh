@@ -78,49 +78,74 @@ if command -v gh &> /dev/null; then
 else
     print_warning "GitHub CLI not found. Installing to user directory..."
     
-    # Download and install GitHub CLI to user's local bin
-    GH_VERSION="2.40.1"
-    GH_ARCH=$(uname -m)
+    # Use the latest stable version
+    GH_VERSION="2.46.0"  # Updated to latest stable as of March 2024
     
-    if [ "$GH_ARCH" = "arm64" ]; then
+    # Detect architecture
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "arm64" ]; then
         GH_ARCH="arm64"
-    else
+    elif [ "$ARCH" = "x86_64" ]; then
         GH_ARCH="amd64"
+    else
+        print_error "Unsupported architecture: $ARCH"
+        exit 1
     fi
     
+    # Construct download URL
     GH_URL="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_macOS_${GH_ARCH}.tar.gz"
     
-    print_step "Downloading GitHub CLI..."
-    curl -L -o /tmp/gh.tar.gz "$GH_URL"
+    print_step "Downloading GitHub CLI v${GH_VERSION} for ${GH_ARCH}..."
+    echo "  URL: $GH_URL"
     
-    print_step "Installing GitHub CLI to ~/.local..."
-    
-    # Create user's local bin directory if it doesn't exist
-    mkdir -p "$HOME/.local/bin"
-    
-    # Extract to temp directory first
-    mkdir -p /tmp/gh-extract
-    tar -xzf /tmp/gh.tar.gz -C /tmp/gh-extract --strip-components=1
-    
-    # Copy the gh binary to user's local bin
-    cp /tmp/gh-extract/bin/gh "$HOME/.local/bin/"
-    chmod +x "$HOME/.local/bin/gh"
-    
-    # Clean up
-    rm -rf /tmp/gh.tar.gz /tmp/gh-extract
-    
-    # Add to PATH if not already there
-    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-        print_warning "Adding ~/.local/bin to PATH..."
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-        export PATH="$HOME/.local/bin:$PATH"
-    fi
-    
-    if command -v gh &> /dev/null; then
-        print_success "GitHub CLI installed successfully"
+    # Download with verbose output for debugging
+    if curl -L -o /tmp/gh.tar.gz "$GH_URL" --fail --show-error; then
+        # Check file size
+        FILE_SIZE=$(ls -l /tmp/gh.tar.gz | awk '{print $5}')
+        echo "  Downloaded: $FILE_SIZE bytes"
+        
+        if [ "$FILE_SIZE" -lt 1000 ]; then
+            print_error "Download failed - file too small ($FILE_SIZE bytes)"
+            echo "  This usually means the URL returned an error page"
+            exit 1
+        fi
+        
+        print_step "Installing GitHub CLI to ~/.local..."
+        
+        # Create user's local bin directory
+        mkdir -p "$HOME/.local/bin"
+        
+        # Extract directly to user's local directory
+        tar -xzf /tmp/gh.tar.gz -C "$HOME/.local" --strip-components=1
+        
+        # The gh binary should now be at ~/.local/bin/gh
+        if [ -f "$HOME/.local/bin/gh" ]; then
+            chmod +x "$HOME/.local/bin/gh"
+            
+            # Add to PATH for current session
+            export PATH="$HOME/.local/bin:$PATH"
+            
+            # Add to PATH permanently if not already there
+            if ! grep -q '$HOME/.local/bin' ~/.zshrc 2>/dev/null; then
+                echo '' >> ~/.zshrc
+                echo '# Added by StitchKit installer' >> ~/.zshrc
+                echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+            fi
+            
+            print_success "GitHub CLI installed successfully"
+        else
+            print_error "GitHub CLI binary not found after extraction"
+            exit 1
+        fi
+        
+        # Clean up
+        rm -f /tmp/gh.tar.gz
     else
-        print_error "Failed to install GitHub CLI"
-        echo "Please install manually from: https://cli.github.com"
+        print_error "Failed to download GitHub CLI"
+        echo ""
+        echo "Please install GitHub CLI manually:"
+        echo "  brew install gh"
+        echo "Or download from: https://cli.github.com"
         exit 1
     fi
 fi
