@@ -76,9 +76,9 @@ if command -v gh &> /dev/null; then
     GH_VERSION=$(gh --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     print_success "GitHub CLI $GH_VERSION found"
 else
-    print_warning "GitHub CLI not found. Installing..."
+    print_warning "GitHub CLI not found. Installing to user directory..."
     
-    # Download and install GitHub CLI directly (no Homebrew required)
+    # Download and install GitHub CLI to user's local bin
     GH_VERSION="2.40.1"
     GH_ARCH=$(uname -m)
     
@@ -93,9 +93,28 @@ else
     print_step "Downloading GitHub CLI..."
     curl -L -o /tmp/gh.tar.gz "$GH_URL"
     
-    print_step "Installing GitHub CLI..."
-    sudo tar -xzf /tmp/gh.tar.gz -C /usr/local --strip-components=1
-    rm /tmp/gh.tar.gz
+    print_step "Installing GitHub CLI to ~/.local..."
+    
+    # Create user's local bin directory if it doesn't exist
+    mkdir -p "$HOME/.local/bin"
+    
+    # Extract to temp directory first
+    mkdir -p /tmp/gh-extract
+    tar -xzf /tmp/gh.tar.gz -C /tmp/gh-extract --strip-components=1
+    
+    # Copy the gh binary to user's local bin
+    cp /tmp/gh-extract/bin/gh "$HOME/.local/bin/"
+    chmod +x "$HOME/.local/bin/gh"
+    
+    # Clean up
+    rm -rf /tmp/gh.tar.gz /tmp/gh-extract
+    
+    # Add to PATH if not already there
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        print_warning "Adding ~/.local/bin to PATH..."
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
     
     if command -v gh &> /dev/null; then
         print_success "GitHub CLI installed successfully"
