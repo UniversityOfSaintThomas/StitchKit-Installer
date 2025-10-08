@@ -76,76 +76,55 @@ if command -v gh &> /dev/null; then
     GH_VERSION=$(gh --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     print_success "GitHub CLI $GH_VERSION found"
 else
-    print_warning "GitHub CLI not found. Installing to user directory..."
+    print_warning "GitHub CLI not found. Installing..."
     
-    # Use the latest stable version
-    GH_VERSION="2.46.0"  # Updated to latest stable as of March 2024
+    # Use the universal .pkg installer
+    GH_VERSION="2.81.0"
+    GH_URL="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_macOS_universal.pkg"
     
-    # Detect architecture
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "arm64" ]; then
-        GH_ARCH="arm64"
-    elif [ "$ARCH" = "x86_64" ]; then
-        GH_ARCH="amd64"
-    else
-        print_error "Unsupported architecture: $ARCH"
-        exit 1
-    fi
+    print_step "Downloading GitHub CLI v${GH_VERSION}..."
     
-    # Construct download URL
-    GH_URL="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_macOS_${GH_ARCH}.tar.gz"
-    
-    print_step "Downloading GitHub CLI v${GH_VERSION} for ${GH_ARCH}..."
-    echo "  URL: $GH_URL"
-    
-    # Download with verbose output for debugging
-    if curl -L -o /tmp/gh.tar.gz "$GH_URL" --fail --show-error; then
-        # Check file size
-        FILE_SIZE=$(ls -l /tmp/gh.tar.gz | awk '{print $5}')
-        echo "  Downloaded: $FILE_SIZE bytes"
+    # Download the .pkg file
+    if curl -L -o /tmp/gh-installer.pkg "$GH_URL" --fail --show-error; then
+        # Check file size to ensure successful download
+        FILE_SIZE=$(ls -l /tmp/gh-installer.pkg | awk '{print $5}')
         
-        if [ "$FILE_SIZE" -lt 1000 ]; then
+        if [ "$FILE_SIZE" -lt 1000000 ]; then  # Less than 1MB means something went wrong
             print_error "Download failed - file too small ($FILE_SIZE bytes)"
-            echo "  This usually means the URL returned an error page"
+            echo "Please install GitHub CLI manually from: https://cli.github.com"
             exit 1
         fi
         
-        print_step "Installing GitHub CLI to ~/.local..."
+        print_step "Installing GitHub CLI (you may be prompted for your password)..."
         
-        # Create user's local bin directory
-        mkdir -p "$HOME/.local/bin"
-        
-        # Extract directly to user's local directory
-        tar -xzf /tmp/gh.tar.gz -C "$HOME/.local" --strip-components=1
-        
-        # The gh binary should now be at ~/.local/bin/gh
-        if [ -f "$HOME/.local/bin/gh" ]; then
-            chmod +x "$HOME/.local/bin/gh"
-            
-            # Add to PATH for current session
-            export PATH="$HOME/.local/bin:$PATH"
-            
-            # Add to PATH permanently if not already there
-            if ! grep -q '$HOME/.local/bin' ~/.zshrc 2>/dev/null; then
-                echo '' >> ~/.zshrc
-                echo '# Added by StitchKit installer' >> ~/.zshrc
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-            fi
-            
+        # Install the .pkg file
+        # This requires admin privileges but installs system-wide
+        if sudo installer -pkg /tmp/gh-installer.pkg -target /; then
             print_success "GitHub CLI installed successfully"
         else
-            print_error "GitHub CLI binary not found after extraction"
+            print_error "Failed to install GitHub CLI"
+            echo "Please install manually from: https://cli.github.com"
             exit 1
         fi
         
         # Clean up
-        rm -f /tmp/gh.tar.gz
+        rm -f /tmp/gh-installer.pkg
+        
+        # Verify installation
+        if ! command -v gh &> /dev/null; then
+            print_error "GitHub CLI installation verification failed"
+            echo "The installer completed but 'gh' command not found"
+            echo "You may need to restart your terminal or add it to PATH"
+            exit 1
+        fi
     else
         print_error "Failed to download GitHub CLI"
         echo ""
         echo "Please install GitHub CLI manually:"
-        echo "  brew install gh"
-        echo "Or download from: https://cli.github.com"
+        echo "  1. Visit: https://cli.github.com"
+        echo "  2. Download the installer for macOS"
+        echo "  3. Run the installer"
+        echo "  4. Re-run this StitchKit installer"
         exit 1
     fi
 fi
